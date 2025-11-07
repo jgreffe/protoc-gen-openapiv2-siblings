@@ -1,0 +1,209 @@
+version: '3'
+
+vars:
+  BUILD_DIR: ./build
+  GOOGLE_API_DIR: ./build/google/api
+  GRPC_GATEWAY_DIR: ./build/grpc-gateway
+
+  # Tool versions - used by `go install`
+  PROTOC_GEN_GO_VERSION: v1.36.1
+  PROTOC_GEN_GO_GRPC_VERSION: v1.5.1
+  PROTOC_GEN_GRPC_GATEWAY_VERSION: v2.26.1
+  PROTOC_GEN_OPENAPIV2_VERSION: v2.26.1
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  init:
+    desc: Create necessary directories
+    silent: true
+    cmds:
+      - mkdir -p {{.BUILD_DIR}} gen/go gen/openapi
+
+  wipe:
+    deps: [clean]
+    desc: Remove build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}} gen/go/* gen/openapi/*
+        
+  clean:
+    desc: Remove generated files
+    cmds:
+      - rm -rf gen/go/* gen/openapi/*
+
+  install-protoc:
+    desc: Install protoc compiler (via Homebrew on macOS, or manual on Linux)
+    silent: true
+    cmds:
+      - |
+        if command -v protoc &> /dev/null; then
+          echo "protoc already installed: $(protoc --version)"
+        else
+          echo "Please install protoc manually:"
+          echo "  - macOS: brew install protobuf"
+          echo "  - Linux: apt install protobuf-compiler"
+          echo "  - Or download from: https://github.com/protocolbuffers/protobuf/releases"
+          exit 1
+        fi
+
+  fetch-googleapis:
+    desc: Fetch Google API proto files (via svn export - faster than full clone)
+    silent: true
+    cmds:
+      - mkdir -p {{.GOOGLE_API_DIR}}
+      - |
+        if [ ! -d {{.GOOGLE_API_DIR}}/google ]; then
+          echo "Fetching Google API proto files..."
+          # Use svn export for a lightweight download of just the google/api directory
+          svn export --force https://github.com/googleapis/googleapis/trunk/google/api {{.GOOGLE_API_DIR}}/google/api 2>/dev/null || \
+          {
+            echo "svn not available, using git clone instead..."
+            git clone --depth=1 https://github.com/googleapis/googleapis.git {{.BUILD_DIR}}/googleapis-tmp
+            mkdir -p {{.GOOGLE_API_DIR}}/google
+            cp -r {{.BUILD_DIR}}/googleapis-tmp/google/api {{.GOOGLE_API_DIR}}/google/
+            rm -rf {{.BUILD_DIR}}/googleapis-tmp
+          }
+          echo "✓ Google API proto files fetched"
+        else
+          echo "✓ Google API proto files already present"
+        fi
+
+  fetch-grpc-gateway:
+    desc: Fetch grpc-gateway proto files for OpenAPI annotations
+    silent: true
+    cmds:
+      - mkdir -p {{.GRPC_GATEWAY_DIR}}
+      - |
+        if [ ! -d {{.GRPC_GATEWAY_DIR}}/protoc-gen-openapiv2 ]; then
+          echo "Fetching grpc-gateway proto files..."
+          git clone --depth=1 https://github.com/grpc-ecosystem/grpc-gateway.git {{.BUILD_DIR}}/grpc-gateway-tmp
+          mkdir -p {{.GRPC_GATEWAY_DIR}}
+          cp -r {{.BUILD_DIR}}/grpc-gateway-tmp/protoc-gen-openapiv2 {{.GRPC_GATEWAY_DIR}}/
+          rm -rf {{.BUILD_DIR}}/grpc-gateway-tmp
+          echo "✓ grpc-gateway proto files fetched"
+        else
+          echo "✓ grpc-gateway proto files already present"
+        fi
+
+  install-tools:
+    desc: Install all protoc plugins (to system GOBIN)
+    silent: true
+    deps: [init, install-protoc, fetch-googleapis, fetch-grpc-gateway]
+    cmds:
+      - echo "Installing protoc plugins..."
+      - go install google.golang.org/protobuf/cmd/protoc-gen-go@{{.PROTOC_GEN_GO_VERSION}}
+      - go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@{{.PROTOC_GEN_GO_GRPC_VERSION}}
+      - go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@{{.PROTOC_GEN_GRPC_GATEWAY_VERSION}}
+      - go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@{{.PROTOC_GEN_OPENAPIV2_VERSION}}
+      - echo "✓ All protoc plugins installed to $(go env GOPATH)/bin"
+      - echo "  Make sure $(go env GOPATH)/bin is in your PATH"
+
+  generate-go:
+    desc: Generate Go code from proto files
+    silent: true
+    deps: [install-tools]
+    cmds:
+      - echo "Generating Go code..."
+      - |
+        protoc \
+          --go_out=./gen/go \
+          --go_opt=paths=source_relative \
+          -I=./proto:{{.GOOGLE_API_DIR}}:{{.GRPC_GATEWAY_DIR}} \
+          proto/*.proto
+
+  generate-grpc:
+    desc: Generate gRPC code from proto files
+    silent: true
+    deps: [install-tools]
+    cmds:
+      - echo "Generating gRPC code..."
+      - |
+        protoc \
+          --go-grpc_out=./gen/go \
+          --go-grpc_opt=paths=source_relative \
+          -I=./proto:{{.GOOGLE_API_DIR}}:{{.GRPC_GATEWAY_DIR}} \
+          proto/*.proto
+
+  generate-gateway:
+    desc: Generate gRPC-gateway code from proto files
+    silent: true
+    deps: [install-tools]
+    cmds:
+      - echo "Generating gRPC-gateway code..."
+      - |
+        protoc \
+          --grpc-gateway_out=./gen/go \
+          --grpc-gateway_opt=paths=source_relative \
+          --grpc-gateway_opt=generate_unbound_methods=false \
+          -I=./proto:{{.GOOGLE_API_DIR}}:{{.GRPC_GATEWAY_DIR}} \
+          proto/service.proto
+
+  generate-openapi:
+    desc: Generate OpenAPI v2 spec from proto files (demonstrates the issue)
+    silent: true
+    deps: [install-tools]
+    cmds:
+      - echo "Generating OpenAPI v2 specification..."
+      - mkdir -p gen/openapi
+      - |
+        protoc \
+          --openapiv2_out=./gen/openapi \
+          --openapiv2_opt=allow_merge=true,merge_file_name=api \
+          --openapiv2_opt=openapi_configuration=openapi_config.yaml \
+          -I=./proto:{{.GOOGLE_API_DIR}}:{{.GRPC_GATEWAY_DIR}} \
+          proto/service.proto
+      - echo "OpenAPI spec generated at gen/openapi/api.swagger.json"
+      - echo "Check the generated file for:"
+      - echo "  1. 'no-\$$ref-siblings' issues (schemas with both \$$ref and other properties)"
+      - echo "  2. Description duplication in schema definitions"
+
+  generate:
+    desc: Generate all code and OpenAPI specs
+    silent: true
+    cmds:
+      - task: generate-go
+      - task: generate-grpc
+      - task: generate-gateway
+      - task: generate-openapi
+      - task: update-deps
+
+  update-deps:
+    desc: Update Go module dependencies
+    cmds:
+      - cd gen/go && go mod init github.com/example/openapi-siblings/gen/go || true
+      - cd gen/go && go mod tidy || true
+
+  install-vacuum:
+    desc: Install vacuum OpenAPI linter
+    silent: true
+    cmds:
+      - |
+        if ! command -v vacuum &> /dev/null; then
+          echo "Installing vacuum..."
+          go install github.com/daveshanley/vacuum@latest
+          echo "vacuum installed successfully"
+        else
+          echo "vacuum already installed"
+        fi
+
+  inspect:
+    desc: Lint and validate generated OpenAPI spec with vacuum
+    deps: [install-vacuum]
+    silent: true
+    cmds:
+      - |
+        if [ -f gen/openapi/api.swagger.json ]; then
+          echo "=== Validating OpenAPI spec with vacuum ==="
+          echo ""
+          vacuum lint gen/openapi/api.swagger.json --details --errors-only || true
+          echo ""
+          echo "=== Full vacuum report ==="
+          vacuum lint gen/openapi/api.swagger.json --details || true
+          echo ""
+          echo "Full spec location: gen/openapi/api.swagger.json"
+        else
+          echo "OpenAPI spec not generated yet. Run 'task generate' first."
+        fi

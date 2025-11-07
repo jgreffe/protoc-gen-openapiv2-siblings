@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package demo;
+
+option go_package = "github.com/example/openapi-siblings/gen/go;demo";
+
+import "google/api/annotations.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "common.proto";
+
+// Request message for creating an item
+message CreateItemRequest {
+  // The item to create
+  ItemWithChoice item = 1;
+}
+
+// Response message for creating an item
+message CreateItemResponse {
+  // The created item with its ID assigned
+  ItemWithChoice item = 1;
+  // Success indicator
+  bool success = 2;
+}
+
+// Request message for getting an item
+message GetItemRequest {
+  // The ID of the item to retrieve
+  string id = 1;
+}
+
+// Response message for getting an item
+message GetItemResponse {
+  // The retrieved item
+  ItemWithChoice item = 1;
+}
+
+// Request message for listing items
+message ListItemsRequest {
+  // Maximum number of items to return
+  int32 page_size = 1;
+  // Page token for pagination
+  string page_token = 2;
+}
+
+// Response message for listing items
+message ListItemsResponse {
+  // The list of items
+  repeated ItemWithChoice items = 1;
+  // Token for next page
+  string next_page_token = 2;
+}
+
+// The Item Service demonstrates OpenAPI generation issues
+service ItemService {
+  // CreateItem creates a new item with a choice value
+  // This endpoint will demonstrate the no-$ref-siblings issue
+  rpc CreateItem(CreateItemRequest) returns (CreateItemResponse) {
+    option (google.api.http) = {
+      post: "/v1/items"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "Creates a new item with a choice value (text, numeric, or object)";
+      summary: "Create a new item";
+    };
+  }
+
+  // GetItem retrieves an item by ID
+  rpc GetItem(GetItemRequest) returns (GetItemResponse) {
+    option (google.api.http) = {
+      get: "/v1/items/{id}"
+    };
+  }
+
+  // ListItems returns a list of items
+  // This demonstrates description duplication for repeated messages
+  rpc ListItems(ListItemsRequest) returns (ListItemsResponse) {
+    option (google.api.http) = {
+      get: "/v1/items"
+    };
+  }
+}

@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package demo;
+
+option go_package = "github.com/example/openapi-siblings/gen/go;demo";
+
+// Simple message that will be reused in multiple places
+// This helps demonstrate description duplication
+message SimpleMessage {
+  // A simple string field with description
+  string id = 1;
+  // A simple name field with description
+  string name = 2;
+}
+
+// Message with a oneof that causes ref-siblings issue
+message ItemWithChoice {
+  // The ID of the item
+  string id = 1;
+
+  // Description of the item - this description may get duplicated
+  string description = 2;
+
+  // The choice field - this oneof creates the no-$ref-siblings issue
+  // because OpenAPI v2 doesn't support $ref alongside other properties
+  oneof choice {
+    // Option A - a text value
+    string text_value = 3;
+    // Option B - a numeric value
+    int32 numeric_value = 4;
+    // Option C - a nested object value
+    NestedObject object_value = 5;
+  }
+}
+
+// A nested object to demonstrate complex ref issues
+message NestedObject {
+  // Data field in nested object
+  string data = 1;
+  // Additional metadata
+  string metadata = 2;
+}

@@ -1,0 +1,20 @@
+openapiOptions:
+  file:
+    - file: "service.proto"
+      option:
+        info:
+          title: "OpenAPI v2 Siblings Demo API"
+          description: "Minimal API to demonstrate OpenAPI generation issues with protoc-gen-openapiv2"
+          version: "1.0.0"
+          contact:
+            name: "Demo Project"
+            url: "https://github.com/jgreffe/protoc-gen-openapiv2-siblings"
+        host: "api.generated.com"
+        basePath: "/"
+        schemes:
+          - HTTPS
+          - HTTP
+        consumes:
+          - "application/json"
+        produces:
+          - "application/json"
