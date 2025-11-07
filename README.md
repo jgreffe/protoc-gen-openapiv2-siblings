@@ -64,9 +64,7 @@ protoc-gen-openapiv2-siblings/
 ├── Taskfile.yml          # Task definitions for code generation
 ├── go.mod                # Go module definition
 ├── go.sum                # Go dependencies checksums
-├── README.md             # This file
-├── ISSUES_FOUND.md       # Detailed analysis of issues found
-└── QUICKSTART.md         # Quick start guide
+└── README.md             # This file
 ```
 
 ## Prerequisites
