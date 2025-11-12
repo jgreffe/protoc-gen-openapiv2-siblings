@@ -8,8 +8,8 @@ vars:
   # Tool versions - used by `go install`
   PROTOC_GEN_GO_VERSION: v1.36.1
   PROTOC_GEN_GO_GRPC_VERSION: v1.5.1
-  PROTOC_GEN_GRPC_GATEWAY_VERSION: v2.26.1
-  PROTOC_GEN_OPENAPIV2_VERSION: v2.26.1
+  PROTOC_GEN_GRPC_GATEWAY_VERSION: v2.27.3
+  PROTOC_GEN_OPENAPIV2_VERSION: v2.27.3
 
 tasks:
   default:
@@ -153,6 +153,8 @@ tasks:
           --openapiv2_out=./gen/openapi \
           --openapiv2_opt=allow_merge=true,merge_file_name=api \
           --openapiv2_opt=openapi_configuration=openapi_config.yaml \
+          #--openapiv2_opt=use_allof_for_refs=true \
+          #--openapiv2_opt=omit_array_item_type_when_ref_sibling=true \
           -I=./proto:{{.GOOGLE_API_DIR}}:{{.GRPC_GATEWAY_DIR}} \
           proto/service.proto
       - echo "OpenAPI spec generated at gen/openapi/api.swagger.json"
